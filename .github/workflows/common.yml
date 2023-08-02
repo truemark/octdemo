@@ -1,0 +1,204 @@
+name: 'common'
+
+on:
+  workflow_call:
+    inputs:
+      TF_WORKSPACE:
+        required: true
+        type: string
+      AWS_ACCOUNT_ID:
+        required: true
+        type: string
+      AWS_REGION:
+        required: false # uses AWS_DEFAULT_REGION by default
+        type: string
+    secrets:
+      CONFIG_ACTIONS:
+        required: true
+      APP_ID:
+        required: true
+      PRIVATE_KEY:
+        required: true
+#env:
+#  MESSAGE: "Hello World from Common!"
+#  OCT_VAULT_SHARED_READ_ARTIFACTORY_USERNAME: ${{ secrets.OCT_VAULT_SHARED_READ_ARTIFACTORY_USERNAME }}
+#  OCT_VAULT_SHARED_READ_ARTIFACTORY_PASSWORD: ${{ secrets.OCT_VAULT_SHARED_READ_ARTIFACTORY_PASSWORD }}
+
+permissions:
+  checks: write
+  id-token: write
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  check-for-context:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.output-context.outputs.image_tag }}
+    steps:
+      - name: Generate token
+        id: generate_token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.PRIVATE_KEY }}
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Get missing commit context
+        id: get-context
+        uses: truemark/commit-context-action@v1
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+      - name: Save image tag to env var
+        if: ${{ steps.get-context.outputs.value != '' }}
+        id: output-context
+        shell: bash
+        run: |
+          echo image_tag=${{ steps.get-context.outputs.value }} >> $GITHUB_OUTPUT
+  build:
+    if: needs.check-for-context.outputs.image_tag == ''
+    runs-on: self-hosted #   runs-on: self-hosted
+    needs: [check-for-context]
+    env:
+      # Customize the JVM maximum heap limit
+      MAVEN_OPTS: -Xmx3200m
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'corretto'
+          java-version: '11'
+          cache: 'maven'
+      - name: compile
+        run: ./mvnw -Drevision=5 package
+      - uses: actions/upload-artifact@v3
+        with:
+          name: target
+          path: "target/*.jar"
+
+  docker:
+    if: needs.check-for-context.outputs.image_tag == ''
+    runs-on: self-hosted
+    needs: [build, check-for-context]
+    outputs:
+      image_tag: ${{ steps.image_tag.outputs.image_tag }}
+    env:
+      IMAGE_TAG: 700430584483.dkr.ecr.us-west-2.amazonaws.com/octdemo-${{ inputs.TF_WORKSPACE }}:${{ github.run_number }}
+      AWS_ACCOUNT_ID: ${{ inputs.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ inputs.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::700430584483:role/github-action-role #change to reflect your IAM role’s ARN
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: 'no'
+      - name: Build and push to Docker
+        uses: truemark/docker-build-pattern-action@v2
+        with:
+          registry: "700430584483.dkr.ecr.us-west-2.amazonaws.com"
+          image: "${{ env.IMAGE_TAG }}"
+      - name: Generate token
+        id: generate_token1
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.PRIVATE_KEY }}
+      - name: Save image tag to commit context
+        uses: truemark/commit-context-action@v1
+        id: write
+        with:
+#          org: "truemark"
+#          repository-variable: "IMAGE_TAG"
+          token: ${{ secrets.CONFIG_ACTIONS }}
+          #token: "${{ steps.generate_token1.outputs.token }}"
+          value: "${{ env.IMAGE_TAG }}"
+      - id: image_tag
+        run: |
+          echo 'image_tag=${{ env.IMAGE_TAG }}' >> $GITHUB_OUTPUT
+          echo 'image_tag=${{ env.IMAGE_TAG }}'
+
+
+  cdktf:
+    needs: [build, docker, check-for-context]
+    if: |
+      always() &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.docker.result == 'success' || needs.docker.result == 'skipped')
+    runs-on: self-hosted
+    container:
+      image: docker://truemark/terraform-aws-pipe:latest
+
+
+    env:
+      AWS_ACCOUNT_ID: ${{ inputs.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ inputs.AWS_REGION }}
+      IMAGE: ${{ needs.check-for-context.outputs.image_tag || needs.docker.outputs.image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: "us-west-2"
+          role-to-assume: "arn:aws:iam::${{ inputs.AWS_ACCOUNT_ID }}:role/github-action-role"
+          role-session-name: "terraform-devops"
+          mask-aws-account-id: 'no'
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Run yarn install for Terraform CDK
+        uses: borales/actions-yarn@v4
+        with:
+          dir: cdktf
+          cmd: install --frozen-lockfile
+      - name: aws cli call
+        run: aws sts get-caller-identity
+
+      - name: Plan Terraform CDK
+        uses: truemark/terraform-cdk-pattern-action@8306bea34f4f8d4c7242f35060ea098dbb835673
+#        if: github.event_name == 'pull_request'
+        with:
+          mode: plan
+          stack-name: MasterDataStack
+          workspace: ${{ inputs.TF_WORKSPACE }}
+          working-directory: cdktf
+
+      - name: Deploy Terraform CDK
+        uses: truemark/terraform-cdk-pattern-action@8306bea34f4f8d4c7242f35060ea098dbb835673
+#        if: github.event_name == 'push'
+        with:
+          mode: deploy
+          stack-name: MasterDataStack
+          workspace: ${{ inputs.TF_WORKSPACE }}
+          working-directory: cdktf
+
+
+
+#  run_tests:
+#    needs: [cdktf]
+#    runs-on: self-hosted
+#    if: ${{ inputs.TF_WORKSPACE }} == 'qa'
+#    steps:
+#      - name: Prepare Request Body
+#        run: |
+#          echo body='{ "grant_type": "client_credentials", "client_id": "${{ secrets.WAKIZASHI_QA_GRAPHQL_CLIENT_ID }}", "client_secret": "${{ secrets.WAKIZASHI_QA_GRAPHQL_CLIENT_SECRET }}" }' >> $GITHUB_ENV
+#      - name: Get token
+#        run: |
+#          echo "token=$(curl --location 'https://core-qa.octanner.io/sso/oauth/token' \
+#            --header 'Content-Type: application/json' \
+#            --data '${{ env.body }}' | jq -r '.access_token')" >> $GITHUB_ENV
+#      - name: Print token
+#        run: |
+#          echo $token
+#      - name: Call coreFeatures endpoint
+#        run: |
+#          curl -f -I -X GET https://core-masterdata-${{ inputs.TF_WORKSPACE }}.non-prod.octanner.io/coreFeatures \
+#          --header 'Content-Type: application/json' \
+#          --header 'Authorization: Bearer ${{ env.token }}'

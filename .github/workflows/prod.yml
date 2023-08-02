@@ -1,0 +1,13 @@
+name: 'prod'
+
+on: workflow_dispatch
+
+jobs:
+  call-common-workflow:
+    uses: ./.github/workflows/common.yml
+    with:
+      TF_WORKSPACE: prod
+      AWS_ACCOUNT_ID: "700430584483"
+      AWS_REGION: us-west-2
+    secrets:
+      CONFIG_ACTIONS: ${{ secrets.CONFIG_ACTIONS }}
