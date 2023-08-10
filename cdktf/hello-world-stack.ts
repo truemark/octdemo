@@ -14,7 +14,7 @@ import {
 import {ServiceMapping} from "./lib/service-mapping";
 import {StandardS3Backend} from "./lib/standard-s3-backend";
 
-export interface MasterDataStackProps {
+export interface HelloWorldStackProps {
     readonly appName: string;
     readonly servicePort: number;
     readonly containerPort: number;
@@ -30,8 +30,8 @@ export interface MasterDataStackProps {
     readonly environmentVariables?: { [name: string]: string };
 }
 
-export class MasterDataStack extends TerraformStack {
-    constructor(scope: Construct, id: string, props: MasterDataStackProps) {
+export class HelloWorldStack extends TerraformStack {
+    constructor(scope: Construct, id: string, props: HelloWorldStackProps) {
         super(scope, id);
 
         new AwsProvider(this, "AWS", {

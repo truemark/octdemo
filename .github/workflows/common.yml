@@ -166,7 +166,7 @@ jobs:
 #        if: github.event_name == 'pull_request'
         with:
           mode: plan
-          stack-name: MasterDataStack
+          stack-name: HelloWorldStack
           workspace: ${{ inputs.TF_WORKSPACE }}
           working-directory: cdktf
 
@@ -175,7 +175,7 @@ jobs:
 #        if: github.event_name == 'push'
         with:
           mode: deploy
-          stack-name: MasterDataStack
+          stack-name: HelloWorldStack
           workspace: ${{ inputs.TF_WORKSPACE }}
           working-directory: cdktf
 

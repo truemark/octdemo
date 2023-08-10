@@ -1,6 +1,6 @@
 import {App} from "cdktf";
 import {Workspace} from "./lib/enums";
-import {MasterDataStack} from "./master-data-stack";
+import {HelloWorldStack} from "./hello-world-stack";
 
 const workspace = process.env.TF_WORKSPACE as Workspace; // dev/qa/stage/prod
 if (!workspace) throw new Error("Must have a workspace defined.");
@@ -22,7 +22,7 @@ const port = 8080;
 //             : workspace;
 
 const app = new App();
-new MasterDataStack(app, "MasterDataStack", {
+new HelloWorldStack(app, "HelloWorldStack", {
   appName: "hello",
   servicePort: port,
   containerPort: port,
