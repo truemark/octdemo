@@ -12,9 +12,9 @@ on:
       AWS_REGION:
         required: false # uses AWS_DEFAULT_REGION by default
         type: string
-    secrets:
-      CONFIG_ACTIONS:
-        required: true
+#    secrets:
+#      CONFIG_ACTIONS:
+#        required: true
       APP_ID:
         required: true
       PRIVATE_KEY:
