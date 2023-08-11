@@ -19,10 +19,7 @@ on:
         required: true
       PRIVATE_KEY:
         required: true
-#env:
-#  MESSAGE: "Hello World from Common!"
-#  OCT_VAULT_SHARED_READ_ARTIFACTORY_USERNAME: ${{ secrets.OCT_VAULT_SHARED_READ_ARTIFACTORY_USERNAME }}
-#  OCT_VAULT_SHARED_READ_ARTIFACTORY_PASSWORD: ${{ secrets.OCT_VAULT_SHARED_READ_ARTIFACTORY_PASSWORD }}
+
 
 permissions:
   checks: write
@@ -32,34 +29,9 @@ permissions:
   issues: read
 
 jobs:
-  check-for-context:
-    runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.output-context.outputs.image_tag }}
-    steps:
-      - name: Generate token
-        id: generate_token
-        uses: tibdex/github-app-token@v1
-        with:
-          app_id: ${{ secrets.APP_ID }}
-          private_key: ${{ secrets.PRIVATE_KEY }}
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Get missing commit context
-        id: get-context
-        uses: truemark/commit-context-action@v1
-        with:
-          token: ${{ steps.generate_token.outputs.token }}
-      - name: Save image tag to env var
-        if: ${{ steps.get-context.outputs.value != '' }}
-        id: output-context
-        shell: bash
-        run: |
-          echo image_tag=${{ steps.get-context.outputs.value }} >> $GITHUB_OUTPUT
+
   build:
-    if: needs.check-for-context.outputs.image_tag == ''
     runs-on: self-hosted #   runs-on: self-hosted
-    needs: [check-for-context]
     env:
       # Customize the JVM maximum heap limit
       MAVEN_OPTS: -Xmx3200m
@@ -78,9 +50,8 @@ jobs:
           path: "target/*.jar"
 
   docker:
-    if: needs.check-for-context.outputs.image_tag == ''
     runs-on: self-hosted
-    needs: [build, check-for-context]
+    needs: [build]
     outputs:
       image_tag: ${{ steps.image_tag.outputs.image_tag }}
     env:
@@ -101,21 +72,6 @@ jobs:
         with:
           registry: "700430584483.dkr.ecr.us-west-2.amazonaws.com"
           image: "${{ env.IMAGE_TAG }}"
-      - name: Generate token
-        id: generate_token1
-        uses: tibdex/github-app-token@v1
-        with:
-          app_id: ${{ secrets.APP_ID }}
-          private_key: ${{ secrets.PRIVATE_KEY }}
-      - name: Save image tag to commit context
-        uses: truemark/commit-context-action@v1
-        id: write
-        with:
-#          org: "truemark"
-#          repository-variable: "IMAGE_TAG"
-          token: ${{ secrets.CONFIG_ACTIONS }}
-          #token: "${{ steps.generate_token1.outputs.token }}"
-          value: "${{ env.IMAGE_TAG }}"
       - id: image_tag
         run: |
           echo 'image_tag=${{ env.IMAGE_TAG }}' >> $GITHUB_OUTPUT
@@ -123,11 +79,7 @@ jobs:
 
 
   cdktf:
-    needs: [build, docker, check-for-context]
-    if: |
-      always() &&
-      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
-      (needs.docker.result == 'success' || needs.docker.result == 'skipped')
+    needs: [build, docker]
     runs-on: self-hosted
     container:
       image: docker://truemark/terraform-aws-pipe:latest

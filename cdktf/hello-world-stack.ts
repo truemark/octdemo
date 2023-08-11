@@ -7,7 +7,7 @@ import {DataAwsEksCluster} from "@cdktf/provider-aws/lib/data-aws-eks-cluster";
 import {DataAwsEksClusterAuth} from "@cdktf/provider-aws/lib/data-aws-eks-cluster-auth";
 import {KubernetesProvider} from "@cdktf/provider-kubernetes/lib/provider";
 import {KubernetesServiceDeployment} from "./lib/kubernetes-service-deployment";
-import {ExternalSecret} from "./lib/external-secret";
+//import {ExternalSecret} from "./lib/external-secret";
 import {
     DeploymentSpecTemplateSpecContainerResources
 } from "@cdktf/provider-kubernetes/lib/deployment/index-structs/structs0";
@@ -70,25 +70,7 @@ export class HelloWorldStack extends TerraformStack {
             readinessProbe: props.readinessProbe,
             resources: props.resources,
             environmentVariables: props.environmentVariables,
-            externalSecrets: [
-                new ExternalSecret(this, "HelloParameterStoreSecrets", {
-                    provider: "ParameterStore",
-                    namespace: props.namespace,
-                    keys: {
-                        MESSAGE: `${props.workspace}/app/hello/message`
-                    }
-                })
-            ]
-            //     new ExternalSecret(this, "CoreMasterDataVaultSecrets", {
-            //         provider: "Vault",
-            //         namespace: props.namespace,
-            //         keys: {
-            //             OCT_VAULT_APOLLOSTUDIO_CCGATEWAY_GRAPH_NAME: `${props.workspace}/apollostudio/ccgateway:GRAPH_NAME`,
-            //             OCT_VAULT_APOLLOSTUDIO_CCGATEWAY_GRAPH_VARIANT: `${props.workspace}/apollostudio/ccgateway:GRAPH_VARIANT`,
-            //             OCT_VAULT_APOLLOSTUDIO_CCGATEWAY_KEY: `${props.workspace}/apollostudio/ccgateway:KEY`
-            //         }
-            //     }),
-            // ]
+
         });
 
         //const subdomain = props.workspace === "prod" ? "prod" : "non-prod";

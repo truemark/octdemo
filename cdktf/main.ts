@@ -16,10 +16,7 @@ if (!image) throw new Error("Must have an image tag defined.");
 
 const port = 8080;
 
-// const abbreviatedWorkspace =
-//     workspace === "prod" ? "prd"
-//         : workspace === "stage" ? "stg"
-//             : workspace;
+
 
 const app = new App();
 new HelloWorldStack(app, "HelloWorldStack", {
@@ -41,9 +38,9 @@ new HelloWorldStack(app, "HelloWorldStack", {
           : workspace === "stage" ? 210
               : workspace === "qa" ? 230
               : 220,
-  // environmentVariables: {
-  //   MESSAGE: workspace === "dev" ? "Hello Dev" : `Hello`,
-  // }
+  environmentVariables: {
+    MESSAGE: workspace === "dev" ? "Hello Dev" : `Hello`,
+  }
 });
 app.synth();
 
