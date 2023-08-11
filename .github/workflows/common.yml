@@ -31,7 +31,7 @@ permissions:
 jobs:
 
   build:
-    runs-on: self-hosted #   runs-on: self-hosted
+    runs-on: ubuntu-latest #   runs-on: self-hosted
     env:
       # Customize the JVM maximum heap limit
       MAVEN_OPTS: -Xmx3200m
@@ -50,7 +50,7 @@ jobs:
           path: "target/*.jar"
 
   docker:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [build]
     outputs:
       image_tag: ${{ steps.image_tag.outputs.image_tag }}
@@ -80,7 +80,7 @@ jobs:
 
   cdktf:
     needs: [build, docker]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     container:
       image: docker://truemark/terraform-aws-pipe:latest
 
@@ -88,7 +88,7 @@ jobs:
     env:
       AWS_ACCOUNT_ID: ${{ inputs.AWS_ACCOUNT_ID }}
       AWS_REGION: ${{ inputs.AWS_REGION }}
-      IMAGE: ${{ needs.check-for-context.outputs.image_tag || needs.docker.outputs.image_tag }}
+      IMAGE: ${{ needs.docker.outputs.image_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
